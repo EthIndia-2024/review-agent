@@ -2,6 +2,9 @@ from pydantic import BaseModel, Field
 from cdp_langchain.tools import CdpTool
 from cdp import Wallet
 from textblob import TextBlob
+# import nltk
+# nltk.download('punkt_tab')
+# nltk.download('averaged_perceptron_tagger_eng')
 
 HELPFULNESS_PROMPT = """
 This tool evaluates how helpful a review is to a company by analyzing its descriptiveness, sentiment, actionability, uniqueness, specificity, and length adequacy.
@@ -39,13 +42,10 @@ def calculate_review_helpfulness(review_text: str) -> str:
     word_count = len(blob.words)
     descriptiveness_score = ((adjectives + adverbs) / word_count) * 100 if word_count else 0
 
-    # Sentiment analysis
-    sentiment_score = blob.sentiment.polarity * 50 + 50  # Scale to 0-100
-
     # Actionability score (dummy logic for simplicity)
     actionable_keywords = [
     "fix", "improve", "enhance", "upgrade", "address", "modify", "correct", 
-    "adjust", "update", "problem", "issue", "bug", "crash", "error", "defect", 
+    "adjust", "update", "problem", "issue", "bug", "crash", "error", "defect", "lacks",
     "malfunction", "broken", "glitch", "recommend", "suggest", "consider", 
     "would prefer", "should add", "needs", "could be better", "option for", 
     "feature", "functionality", "option", "performance", "speed", "usability", 
@@ -55,10 +55,6 @@ def calculate_review_helpfulness(review_text: str) -> str:
     "confused", "unclear", "hard to use", "not satisfied"
 ]
     actionability_score = 100 if any(word in review_text.lower() for word in actionable_keywords) else 50
-
-    # Uniqueness score
-    # review_embeddings = [TextBlob(text).words for text in [review_text] + existing_reviews]
-    # uniqueness_score = 100 - cosine_similarity([review_embeddings[0]], review_embeddings[1:]).max() * 100
 
     # Specificity score
     specificity_score = 100 if len(blob.noun_phrases) > 2 else 50
@@ -74,30 +70,20 @@ def calculate_review_helpfulness(review_text: str) -> str:
 
     # Final score
     final_score = (
-        0.2 * descriptiveness_score +
-        0.2 * sentiment_score +
-        0.25 * actionability_score +
-        # 0.1 * uniqueness_score +
-        0.15 * specificity_score +
-        0.1 * length_score
+        0.10 * descriptiveness_score +
+        0.30 * actionability_score +
+        0.30 * specificity_score +
+        0.30 * length_score
     )
 
     return (
         f"Review Helpfulness Score: {final_score:.2f}\n"
         f"Contributing Scores:\n"
         f"- Descriptiveness: {descriptiveness_score:.2f}\n"
-        f"- Sentiment: {sentiment_score:.2f}\n"
         f"- Actionability: {actionability_score:.2f}\n"
         f"- Specificity: {specificity_score:.2f}\n"
         f"- Length Adequacy: {length_score:.2f}"
     )
 
-# checkReviewHelpfulnessTool = CdpTool(
-#     name="check_review_helpfulness",
-#     description=HELPFULNESS_PROMPT,
-#     cdp_agentkit_wrapper=agentkit,  # Replace with your instantiated CdpAgentkitWrapper
-#     args_schema=CheckReviewHelpfulnessInput,
-#     func=calculate_review_helpfulness,
-# )
-
-# tools.append(checkReviewHelpfulnessTool)
+# print(calculate_review_helpfulness("The product is amazing but lacks a proper user manual, which made it difficult to set up."))
+# print(calculate_review_helpfulness("The product works well overall, but the instructions for setup were confusing and lacked clarity. It would be great if you could include a step-by-step guide with diagrams for better understanding. Also, the app crashes occasionally when I try to upload large files. Fixing this issue would improve usability significantly."))

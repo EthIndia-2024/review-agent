@@ -10,6 +10,8 @@ from checkreviewscore import calculate_review_helpfulness
 from cdp_langchain.tools import CdpTool
 import os
 from dotenv import load_dotenv
+from incentivecalculation import CalculateIncentiveInput
+from incentivecalculation import calculate_incentive
 
 wallet_data_file = "wallet_data.txt"
 
@@ -113,15 +115,29 @@ def initialize_scorer_agent():
     This tool evaluates how helpful a review is to a company by analyzing its descriptiveness, sentiment, actionability, uniqueness, specificity, and length adequacy.
     """
     
+    CALCULATE_INCENTIVE_PROMPT = """
+    This tool calculates the incentive to pay to a reviewer based on their review score. 
+    The score ranges between 1 and 100, and the incentive is a value between 10^-6 and 10^-4.
+    """
+    
+    calculateIncentiveTool = CdpTool(
+    name="calculate_incentive",
+    description=CALCULATE_INCENTIVE_PROMPT,
+    cdp_agentkit_wrapper=agentkit,
+    args_schema=CalculateIncentiveInput,
+    func=calculate_incentive,
+    )
+    
     checkReviewHelpfulnessTool = CdpTool(
     name="check_review_helpfulness",
     description=HELPFULNESS_PROMPT,
-    cdp_agentkit_wrapper=agentkit,  # Replace with your instantiated CdpAgentkitWrapper
+    cdp_agentkit_wrapper=agentkit,
     args_schema=CheckReviewHelpfulnessInput,
     func=calculate_review_helpfulness,
     )
     
     tools.append(checkReviewHelpfulnessTool)
+    tools.append(calculateIncentiveTool)
 
     # Store buffered conversation history in memory.
     memory = MemorySaver()
@@ -137,7 +153,7 @@ def initialize_scorer_agent():
             "You have the access to the tool to get the different scores of the review submitted by the user and final score also"
             "You have the access to the tool to calculate the incentive to be given to the user based on the score of the review"
             "And your job is to calculate the incentive that is to be given to the reviewer based on how much good (how better score) he has given"
-            "Then finally store the tuple of (customer_wallet_id, service_id, incentive) in the database"
+            # "Then finally store the tuple of (customer_wallet_id, service_id, incentive) in the database"
         ),
 
     ), config
@@ -164,14 +180,33 @@ def review_summarizer(user_review, service_template):
     return summarized_review
 
 
-def review_score_and_transaction_log(summarized_review, service_id, customer_wallet_id):
+def review_score_and_transaction_log(user_review, service_id, customer_wallet_id):
     """Give a certain score to a review the summarized review. And then calculate the incentive which is to be given to the user.
     Store the incentive, user_wallet_id, service_id in the database."""
     print("Starting Review Scorer...")
+    agent_executor, config = initialize_scorer_agent()
+    scorer_output = ""
+    for chunk in agent_executor.stream(
+                {"messages": [HumanMessage(content=user_review)]}, config
+            ):
+        if "agent" in chunk:
+                    print(chunk["agent"]["messages"][0].content)
+                    scorer_output += chunk["agent"]["messages"][0].content
+        elif "tools" in chunk:
+                    print(chunk["tools"]["messages"][0].content)
+                    scorer_output += chunk["tools"]["messages"][0].content
+        print("-------------------")
+        
+    return scorer_output
     
 
-s = review_summarizer("I love the service, it was amazing", "Critique: ..., Praise: ...")
-print(s)
+# s = review_summarizer("I love the service, it was amazing", "Critique: ..., Praise: ...")
+# print(s)
+
+scorer_output = review_score_and_transaction_log("I love the service, it was amazing", "service_id", "customer_wallet_id")
+print('*********************************')
+print(scorer_output)
+
 
 # def main():
 #     """Start the chatbot agent."""
